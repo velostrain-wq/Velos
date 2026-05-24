@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Velos — Your training data, inside Claude</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black: #0a0a0a;
+  --white: #fafaf8;
+  --off: #f2f0eb;
+  --mid: #e4e0d8;
+  --muted: #9a9690;
+  --green: #1c4a2a;
+  --green-mid: #2d6a40;
+  --green-light: #e6efe8;
+  --green-bright: #3a8c52;
+  --border: rgba(10,10,10,0.08);
+  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'DM Sans', system-ui, sans-serif;
+  --radius: 10px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--sans);
+  background: var(--white);
+  color: var(--black);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* UTILS */
+.hidden { display: none !important; }
+
+/* NAV */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2rem; height: 60px;
+  background: rgba(250,250,248,0.9);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.logo { font-family: var(--serif); font-size: 1.4rem; color: var(--black); text-decoration: none; letter-spacing: -0.01em; }
+.nav-right { display: flex; gap: 0.75rem; align-items: center; }
+.btn-ghost { background: none; border: 1px solid var(--mid); color: var(--black); padding: 0.4rem 1rem; border-radius: 6px; font-family: var(--sans); font-size: 0.85rem; cursor: pointer; transition: all 0.15s; }
+.btn-ghost:hover { border-color: var(--black); }
+.btn-dark { background: var(--black); border: 1px solid var(--black); color: var(--white); padding: 0.4rem 1rem; border-radius: 6px; font-family: var(--sans); font-size: 0.85rem; cursor: pointer; transition: all 0.15s; }
+.btn-dark:hover { background: #2a2a2a; }
+
+/* PAGES */
+.page { display: none; min-height: 100vh; }
+.page.active { display: block; }
+
+/* ========== LANDING PAGE ========== */
+#page-landing { background: var(--white); }
+
+.hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 7rem 2rem 5rem;
+  position: relative; overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(28,74,42,0.06) 0%, transparent 70%);
+}
+
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  background: var(--green-light); color: var(--green);
+  padding: 0.3rem 0.9rem; border-radius: 100px;
+  font-size: 0.8rem; font-weight: 500; letter-spacing: 0.02em;
+  margin-bottom: 1.75rem; position: relative; z-index: 1;
+}
+
+.hero-eyebrow::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green-bright);
+}
+
+.hero h1 {
+  font-family: var(--serif); font-size: clamp(2.8rem, 6vw, 5rem);
+  line-height: 1.1; letter-spacing: -0.02em;
+  max-width: 800px; margin: 0 auto 1.5rem;
+  position: relative; z-index: 1;
+}
+
+.hero h1 em { font-style: italic; color: var(--green); }
+
+.hero p {
+  font-size: 1.15rem; color: #555; max-width: 520px;
+  margin: 0 auto 2.5rem; font-weight: 300; line-height: 1.7;
+  position: relative; z-index: 1;
+}
+
+.hero-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; position: relative; z-index: 1; }
+
+.btn-primary {
+  background: var(--green); color: var(--white);
+  border: none; padding: 0.85rem 2rem; border-radius: 8px;
+  font-family: var(--sans); font-size: 0.95rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-primary:hover { background: var(--green-mid); transform: translateY(-1px); }
+
+.btn-secondary {
+  background: transparent; color: var(--black);
+  border: 1px solid var(--mid); padding: 0.85rem 2rem; border-radius: 8px;
+  font-family: var(--sans); font-size: 0.95rem; cursor: pointer; transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--black); }
+
+.hero-sub { margin-top: 1.25rem; font-size: 0.8rem; color: var(--muted); position: relative; z-index: 1; }
+
+/* DEMO BLOCK */
+.demo-block {
+  max-width: 680px; margin: 4rem auto 0;
+  background: var(--black); border-radius: 14px;
+  overflow: hidden; box-shadow: 0 40px 80px rgba(0,0,0,0.18);
+  position: relative; z-index: 1;
+}
+
+.demo-bar {
+  background: #1a1a1a; padding: 0.75rem 1rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+
+.demo-dot { width: 10px; height: 10px; border-radius: 50%; }
+.demo-dot:nth-child(1) { background: #ff5f57; }
+.demo-dot:nth-child(2) { background: #febc2e; }
+.demo-dot:nth-child(3) { background: #28c840; }
+.demo-label { margin-left: auto; font-size: 0.72rem; color: #555; font-family: monospace; }
+
+.demo-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+
+.demo-msg {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+  animation: fadeUp 0.4s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.demo-msg:nth-child(2) { animation-delay: 0.15s; }
+.demo-msg:nth-child(3) { animation-delay: 0.3s; }
+.demo-msg:nth-child(4) { animation-delay: 0.45s; }
+
+.demo-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 600;
+}
+
+.demo-avatar.user { background: #2a2a2a; color: #888; }
+.demo-avatar.ai { background: var(--green); color: white; font-size: 0.65rem; }
+
+.demo-bubble {
+  background: #1a1a1a; border-radius: 10px; padding: 0.65rem 0.9rem;
+  font-size: 0.82rem; line-height: 1.55; color: #d4d0c8; max-width: 480px;
+}
+
+.demo-bubble.user-bubble { background: #1e3a28; color: #a8d4b4; }
+
+.demo-stat { color: #5ecc7a; font-weight: 500; }
+
+/* HOW IT WORKS */
+.section { padding: 6rem 2rem; }
+.section-inner { max-width: 1000px; margin: 0 auto; }
+
+.section-label {
+  font-size: 0.75rem; font-weight: 500; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 1rem;
+}
+
+.section-title {
+  font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.15; letter-spacing: -0.02em; max-width: 600px;
+  margin-bottom: 3.5rem;
+}
+
+.steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2rem; }
+
+.step {
+  padding: 1.75rem; background: var(--off); border-radius: var(--radius);
+  border: 1px solid var(--border);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.step:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.06); }
+
+.step-num {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--green); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600; margin-bottom: 1rem;
+}
+
+.step h3 { font-size: 1rem; font-weight: 500; margin-bottom: 0.5rem; }
+.step p { font-size: 0.875rem; color: #666; line-height: 1.6; }
+
+/* PRICING */
+.pricing-section { padding: 6rem 2rem; background: var(--off); }
+.pricing-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+.pricing-title { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -0.02em; margin-bottom: 0.75rem; }
+.pricing-sub { color: #666; font-size: 1rem; font-weight: 300; margin-bottom: 3.5rem; }
+
+.pricing-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; }
+
+.plan {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 12px; padding: 2rem; text-align: left; position: relative;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.plan:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.08); }
+
+.plan.featured { border-color: var(--green); background: var(--green); color: white; }
+.plan.featured .plan-price-sub { color: rgba(255,255,255,0.6); }
+.plan.featured .plan-feature { color: rgba(255,255,255,0.85); }
+.plan.featured .plan-feature::before { color: rgba(255,255,255,0.6); }
+
+.plan-badge {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  background: var(--black); color: white;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 0.25rem 0.75rem; border-radius: 100px;
+}
+
+.plan-name { font-size: 0.8rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 1rem; }
+.plan.featured .plan-name { color: rgba(255,255,255,0.6); }
+
+.plan-price { font-family: var(--serif); font-size: 3rem; line-height: 1; letter-spacing: -0.03em; margin-bottom: 0.25rem; }
+.plan-price-sub { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.5rem; }
+
+.plan-features { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.75rem; }
+.plan-feature { font-size: 0.875rem; color: #444; display: flex; align-items: center; gap: 0.5rem; }
+.plan-feature::before { content: '✓'; color: var(--green); font-weight: 600; flex-shrink: 0; }
+
+.plan-cta {
+  width: 100%; padding: 0.75rem; border-radius: 7px;
+  font-family: var(--sans); font-size: 0.9rem; font-weight: 500;
+  cursor: pointer; transition: all 0.2s; border: none;
+}
+.plan-cta.dark { background: var(--black); color: white; }
+.plan-cta.dark:hover { background: #2a2a2a; }
+.plan-cta.white { background: white; color: var(--green); }
+.plan-cta.white:hover { background: var(--green-light); }
+.plan-cta.outline { background: transparent; color: var(--black); border: 1px solid var(--mid); }
+.plan-cta.outline:hover { border-color: var(--black); }
+
+/* FOOTER */
+footer {
+  padding: 2.5rem 2rem; border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.8rem; color: var(--muted);
+}
+
+/* ========== AUTH PAGE ========== */
+#page-auth {
+  display: none; min-height: 100vh;
+  background: var(--off);
+  align-items: center; justify-content: center;
+  padding: 5rem 1rem 2rem;
+}
+#page-auth.active { display: flex; }
+
+.auth-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2.5rem;
+  width: 100%; max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.06);
+}
+
+.auth-logo { font-family: var(--serif); font-size: 1.75rem; text-align: center; margin-bottom: 0.5rem; }
+.auth-sub { text-align: center; color: var(--muted); font-size: 0.875rem; margin-bottom: 2rem; }
+
+.auth-tabs { display: flex; gap: 0; margin-bottom: 2rem; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.auth-tab {
+  flex: 1; padding: 0.6rem; background: none; border: none;
+  font-family: var(--sans); font-size: 0.875rem; cursor: pointer;
+  color: var(--muted); transition: all 0.15s;
+}
+.auth-tab.active { background: var(--black); color: white; }
+
+.form-group { margin-bottom: 1.1rem; }
+.form-label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 0.4rem; color: #444; }
+.form-input {
+  width: 100%; padding: 0.7rem 0.9rem;
+  border: 1px solid var(--mid); border-radius: 7px;
+  font-family: var(--sans); font-size: 0.9rem;
+  background: var(--white); color: var(--black);
+  transition: border-color 0.15s; outline: none;
+}
+.form-input:focus { border-color: var(--green); }
+
+.form-error { font-size: 0.8rem; color: #c0392b; margin-top: 1rem; display: none; }
+.form-error.visible { display: block; }
+
+.btn-full {
+  width: 100%; padding: 0.8rem; background: var(--green); color: white;
+  border: none; border-radius: 7px; font-family: var(--sans);
+  font-size: 0.9rem; font-weight: 500; cursor: pointer;
+  transition: all 0.2s; margin-top: 0.5rem;
+}
+.btn-full:hover { background: var(--green-mid); }
+.btn-full:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* ========== ONBOARDING PAGE ========== */
+#page-onboarding {
+  display: none; min-height: 100vh;
+  background: var(--off);
+  align-items: center; justify-content: center;
+  padding: 5rem 1rem 2rem;
+}
+#page-onboarding.active { display: flex; }
+
+.onboard-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 16px; padding: 2.5rem;
+  width: 100%; max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.06);
+}
+
+.onboard-step-label {
+  font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 0.75rem;
+}
+
+.onboard-title { font-family: var(--serif); font-size: 1.6rem; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+.onboard-desc { font-size: 0.875rem; color: #666; line-height: 1.65; margin-bottom: 1.75rem; }
+
+.api-help {
+  background: var(--green-light); border-radius: 8px; padding: 1rem;
+  font-size: 0.8rem; color: var(--green); line-height: 1.6; margin-bottom: 1.5rem;
+}
+.api-help a { color: var(--green); font-weight: 500; }
+
+.verify-status {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.75rem; border-radius: 8px; font-size: 0.85rem;
+  margin-top: 1rem; display: none;
+}
+.verify-status.checking { background: #fff8e1; color: #856404; display: flex; }
+.verify-status.success { background: var(--green-light); color: var(--green); display: flex; }
+.verify-status.error { background: #fdecea; color: #c0392b; display: flex; }
+
+.spinner {
+  width: 14px; height: 14px; border: 2px solid currentColor;
+  border-top-color: transparent; border-radius: 50%;
+  animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ========== DASHBOARD PAGE ========== */
+#page-dashboard { display: none; min-height: 100vh; background: var(--off); padding: 5rem 1.5rem 3rem; }
+#page-dashboard.active { display: block; }
+
+.dash-inner { max-width: 720px; margin: 0 auto; }
+
+.dash-greeting {
+  font-family: var(--serif); font-size: 1.8rem; letter-spacing: -0.02em;
+  margin-bottom: 0.4rem;
+}
+.dash-sub { color: var(--muted); font-size: 0.875rem; margin-bottom: 2.5rem; }
+
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+
+.dash-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem;
+}
+
+.dash-card-label { font-size: 0.75rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.5rem; }
+.dash-card-value { font-family: var(--serif); font-size: 1.6rem; letter-spacing: -0.02em; }
+.dash-card-sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.25rem; }
+
+.status-badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.2rem 0.65rem; border-radius: 100px; font-size: 0.75rem; font-weight: 500;
+}
+.status-badge.trial { background: #fff3cd; color: #856404; }
+.status-badge.active { background: var(--green-light); color: var(--green); }
+.status-badge.expired { background: #fdecea; color: #c0392b; }
+.status-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.mcp-card {
+  background: var(--white); border: 1px solid var(--border);
+  border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem;
+}
+
+.mcp-card-title { font-size: 0.875rem; font-weight: 500; margin-bottom: 0.5rem; }
+.mcp-card-desc { font-size: 0.8rem; color: #666; margin-bottom: 1rem; line-height: 1.6; }
+
+.mcp-url-box {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--off); border: 1px solid var(--mid);
+  border-radius: 8px; padding: 0.65rem 0.9rem;
+}
+
+.mcp-url-text {
+  flex: 1; font-family: monospace; font-size: 0.78rem;
+  color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.btn-copy {
+  background: var(--black); color: white; border: none;
+  padding: 0.35rem 0.75rem; border-radius: 5px;
+  font-family: var(--sans); font-size: 0.75rem; cursor: pointer;
+  flex-shrink: 0; transition: background 0.15s;
+}
+.btn-copy:hover { background: #2a2a2a; }
+.btn-copy.copied { background: var(--green); }
+
+.setup-steps { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+.setup-step {
+  display: flex; align-items: flex-start; gap: 0.75rem;
+  background: var(--off); border-radius: 8px; padding: 0.85rem;
+}
+.setup-step-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--green); color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; font-weight: 600; flex-shrink: 0; margin-top: 1px;
+}
+.setup-step-text { font-size: 0.825rem; color: #444; line-height: 1.55; }
+.setup-step-text strong { color: var(--black); }
+
+.dash-signout {
+  background: none; border: 1px solid var(--mid); color: var(--muted);
+  padding: 0.5rem 1rem; border-radius: 6px; font-family: var(--sans);
+  font-size: 0.8rem; cursor: pointer; transition: all 0.15s; margin-top: 1rem;
+}
+.dash-signout:hover { border-color: #c0392b; color: #c0392b; }
+
+@media (max-width: 600px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  nav { padding: 0 1rem; }
+  .hero h1 { font-size: 2.4rem; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#" class="logo" onclick="showPage('landing')">Velos</a>
+  <div class="nav-right" id="nav-guest">
+    <button class="btn-ghost" onclick="showAuth('login')">Sign in</button>
+    <button class="btn-dark" onclick="showAuth('signup')">Start free trial</button>
+  </div>
+  <div class="nav-right hidden" id="nav-user">
+    <button class="btn-ghost" onclick="showPage('dashboard')">Dashboard</button>
+    <button class="btn-ghost" onclick="signOut()">Sign out</button>
+  </div>
+</nav>
+
+<!-- ========== LANDING ========== -->
+<div id="page-landing" class="page active">
+
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-eyebrow">Now in early access</div>
+    <h1>Your training data,<br><em>inside Claude</em></h1>
+    <p>Ask Claude anything about your Intervals.icu training — fitness trends, workout analysis, race readiness. No copy-pasting. No exports.</p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="showAuth('signup')">Start 7-day free trial</button>
+      <button class="btn-secondary" onclick="document.getElementById('how').scrollIntoView({behavior:'smooth'})">See how it works</button>
+    </div>
+    <p class="hero-sub">No credit card required · 7-day free trial · Cancel anytime</p>
+
+    <div class="demo-block">
+      <div class="demo-bar">
+        <div class="demo-dot"></div><div class="demo-dot"></div><div class="demo-dot"></div>
+        <span class="demo-label">Claude · Velos connected</span>
+      </div>
+      <div class="demo-body">
+        <div class="demo-msg">
+          <div class="demo-avatar user">R</div>
+          <div class="demo-bubble user-bubble">How's my fitness trending over the last 6 weeks?</div>
+        </div>
+        <div class="demo-msg">
+          <div class="demo-avatar ai">AI</div>
+          <div class="demo-bubble">Your CTL has risen from <span class="demo-stat">52 → 71</span> over the past 6 weeks — a solid build. Fatigue (ATL) peaked at <span class="demo-stat">84</span> after your big training block two weeks ago and has since tapered to <span class="demo-stat">68</span>, giving you a form score of <span class="demo-stat">+3</span>. You're in good shape for a hard effort this weekend.</div>
+        </div>
+        <div class="demo-msg">
+          <div class="demo-avatar user">R</div>
+          <div class="demo-bubble user-bubble">What was my best power effort in the last month?</div>
+        </div>
+        <div class="demo-msg">
+          <div class="demo-avatar ai">AI</div>
+          <div class="demo-bubble">Your best 20-minute power was <span class="demo-stat">287w</span> on the 12th — that Thursday hill repeat session. Your 5-minute peak was <span class="demo-stat">361w</span> from the same ride.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="section-inner">
+      <p class="section-label">How it works</p>
+      <h2 class="section-title">From data to conversation in minutes</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Create your account</h3>
+          <p>Sign up with your email. No credit card needed to start your 7-day trial.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Connect Intervals.icu</h3>
+          <p>Paste your Intervals.icu API key. We verify it's valid and store it securely.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Get your MCP URL</h3>
+          <p>You receive a personal URL that connects Claude directly to your training data.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <h3>Ask Claude anything</h3>
+          <p>Add the URL to Claude's settings and start asking questions about your training.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pricing-section">
+    <div class="pricing-inner">
+      <p class="section-label">Pricing</p>
+      <h2 class="pricing-title">Simple, honest pricing</h2>
+      <p class="pricing-sub">Start free. Pay only when you're sure it's worth it.</p>
+      <div class="pricing-grid">
+        <div class="plan">
+          <p class="plan-name">Trial</p>
+          <p class="plan-price">Free</p>
+          <p class="plan-price-sub">7 days, no card needed</p>
+          <ul class="plan-features">
+            <li class="plan-feature">Full access for 7 days</li>
+            <li class="plan-feature">All training tools</li>
+            <li class="plan-feature">Personal MCP URL</li>
+          </ul>
+          <button class="plan-cta outline" onclick="showAuth('signup')">Start trial</button>
+        </div>
+        <div class="plan featured">
+          <span class="plan-badge">Most popular</span>
+          <p class="plan-name">Monthly</p>
+          <p class="plan-price">£4.99</p>
+          <p class="plan-price-sub">per month</p>
+          <ul class="plan-features">
+            <li class="plan-feature">Everything in trial</li>
+            <li class="plan-feature">Unlimited queries</li>
+            <li class="plan-feature">Priority support</li>
+          </ul>
+          <button class="plan-cta white" onclick="showAuth('signup')">Get started</button>
+        </div>
+        <div class="plan">
+          <p class="plan-name">Annual</p>
+          <p class="plan-price">£29.99</p>
+          <p class="plan-price-sub">per year · save 50%</p>
+          <ul class="plan-features">
+            <li class="plan-feature">Everything in monthly</li>
+            <li class="plan-feature">Best value</li>
+            <li class="plan-feature">Annual receipt for expenses</li>
+          </ul>
+          <button class="plan-cta dark" onclick="showAuth('signup')">Get started</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© 2026 Velos</span>
+    <span>Built for Intervals.icu athletes</span>
+  </footer>
+</div>
+
+<!-- ========== AUTH ========== -->
+<div id="page-auth" class="page">
+  <div class="auth-card">
+    <p class="auth-logo">Velos</p>
+    <p class="auth-sub" id="auth-sub">Start your 7-day free trial</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-signup" onclick="switchTab('signup')">Sign up</button>
+      <button class="auth-tab" id="tab-login" onclick="switchTab('login')">Sign in</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input class="form-input" type="email" id="auth-email" placeholder="you@example.com">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" type="password" id="auth-password" placeholder="••••••••">
+    </div>
+    <p class="form-error" id="auth-error"></p>
+    <button class="btn-full" id="auth-submit" onclick="handleAuth()">Create account</button>
+  </div>
+</div>
+
+<!-- ========== ONBOARDING ========== -->
+<div id="page-onboarding" class="page">
+  <div class="onboard-card">
+    <p class="onboard-step-label">Step 1 of 1</p>
+    <h2 class="onboard-title">Connect your Intervals.icu account</h2>
+    <p class="onboard-desc">We need your API key to connect Claude to your training data. It's encrypted and stored securely — we never share it.</p>
+
+    <div class="api-help">
+      Find your API key in Intervals.icu → <strong>Settings</strong> → scroll to <strong>Developer Settings</strong> → copy your API key.
+      <br><br>
+      <a href="https://intervals.icu/settings" target="_blank">Open Intervals.icu settings →</a>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Intervals.icu API Key</label>
+      <input class="form-input" type="password" id="onboard-apikey" placeholder="Paste your API key here">
+    </div>
+
+    <div class="verify-status" id="verify-status"></div>
+
+    <button class="btn-full" id="onboard-submit" onclick="handleOnboarding()">Connect & get my MCP URL</button>
+  </div>
+</div>
+
+<!-- ========== DASHBOARD ========== -->
+<div id="page-dashboard" class="page">
+  <div class="dash-inner">
+    <h1 class="dash-greeting" id="dash-greeting">Welcome back</h1>
+    <p class="dash-sub" id="dash-sub">Here's your Velos dashboard</p>
+
+    <div class="dash-grid">
+      <div class="dash-card">
+        <p class="dash-card-label">Status</p>
+        <div id="dash-status-badge"></div>
+        <p class="dash-card-sub" id="dash-status-sub"></p>
+      </div>
+      <div class="dash-card">
+        <p class="dash-card-label">Account</p>
+        <p class="dash-card-value" style="font-size:1rem;font-family:var(--sans)" id="dash-email"></p>
+        <p class="dash-card-sub">Intervals.icu connected</p>
+      </div>
+    </div>
+
+    <div class="mcp-card">
+      <p class="mcp-card-title">Your MCP URL</p>
+      <p class="mcp-card-desc">Add this URL to Claude's MCP settings to connect your training data. Keep it private — anyone with this URL can access your data.</p>
+      <div class="mcp-url-box">
+        <span class="mcp-url-text" id="dash-mcp-url">Loading...</span>
+        <button class="btn-copy" id="copy-btn" onclick="copyMcpUrl()">Copy</button>
+      </div>
+    </div>
+
+    <div class="mcp-card">
+      <p class="mcp-card-title">How to connect Claude</p>
+      <div class="setup-steps">
+        <div class="setup-step">
+          <div class="setup-step-num">1</div>
+          <p class="setup-step-text">Open <strong>Claude.ai</strong> → click your profile → <strong>Settings</strong></p>
+        </div>
+        <div class="setup-step">
+          <div class="setup-step-num">2</div>
+          <p class="setup-step-text">Go to <strong>Integrations</strong> → <strong>Add custom integration</strong></p>
+        </div>
+        <div class="setup-step">
+          <div class="setup-step-num">3</div>
+          <p class="setup-step-text">Paste your MCP URL above and save. Claude now has access to your training data.</p>
+        </div>
+      </div>
+    </div>
+
+    <button class="dash-signout" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<script>
+// ============ SUPABASE INIT ============
+const SUPABASE_URL = 'https://iaqovllibecavqeitcae.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_E0xdq4W76TXiWsbzvkg5rw_K44cklJI';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ============ ROUTING ============
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+}
+
+function showAuth(mode) {
+  showPage('auth');
+  switchTab(mode);
+}
+
+function switchTab(mode) {
+  document.getElementById('tab-signup').classList.toggle('active', mode === 'signup');
+  document.getElementById('tab-login').classList.toggle('active', mode === 'login');
+  document.getElementById('auth-submit').textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+  document.getElementById('auth-sub').textContent = mode === 'signup' ? 'Start your 7-day free trial' : 'Welcome back';
+  document.getElementById('auth-submit').dataset.mode = mode;
+  document.getElementById('auth-error').classList.remove('visible');
+}
+
+// ============ AUTH ============
+async function handleAuth() {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const mode = document.getElementById('auth-submit').dataset.mode || 'signup';
+  const btn = document.getElementById('auth-submit');
+  const errEl = document.getElementById('auth-error');
+
+  if (!email || !password) { showError(errEl, 'Please fill in all fields.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
+  errEl.classList.remove('visible');
+
+  try {
+    let result;
+    if (mode === 'signup') {
+      result = await sb.auth.signUp({ email, password });
+    } else {
+      result = await sb.auth.signInWithPassword({ email, password });
+    }
+
+    if (result.error) {
+      showError(errEl, result.error.message);
+      btn.disabled = false;
+      btn.textContent = mode === 'signup' ? 'Create account' : 'Sign in';
+      return;
+    }
+
+    await handlePostAuth(result.data.user);
+
+  } catch (e) {
+    showError(errEl, 'Something went wrong. Please try again.');
+    btn.disabled = false;
+  }
+}
+
+async function handlePostAuth(user) {
+  if (!user) return;
+  updateNavForUser();
+
+  // Check if user already has credentials stored
+  const { data } = await sb.from('users').select('athlete_id, access_token').eq('id', user.id).single();
+
+  if (data?.athlete_id && data?.access_token) {
+    await loadDashboard(user, data);
+    showPage('dashboard');
+  } else {
+    showPage('onboarding');
+  }
+}
+
+function showError(el, msg) {
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+// ============ ONBOARDING ============
+async function handleOnboarding() {
+  const apiKey = document.getElementById('onboard-apikey').value.trim();
+  const btn = document.getElementById('onboard-submit');
+  const statusEl = document.getElementById('verify-status');
+
+  if (!apiKey) { return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying...';
+  statusEl.className = 'verify-status checking';
+  statusEl.innerHTML = '<div class="spinner"></div> Verifying your API key with Intervals.icu...';
+
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/store-api-key`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ apiKey })
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      statusEl.className = 'verify-status error';
+      statusEl.innerHTML = '✕ ' + (result.error || 'Verification failed. Check your API key.');
+      btn.disabled = false;
+      btn.textContent = 'Connect & get my MCP URL';
+      return;
+    }
+
+    statusEl.className = 'verify-status success';
+    statusEl.innerHTML = '✓ Connected successfully';
+
+    // Load dashboard
+    const { data: { user } } = await sb.auth.getUser();
+    const { data: userData } = await sb.from('users').select('athlete_id, access_token, subscription_status, trial_end_date, email').eq('id', user.id).single();
+    await loadDashboard(user, userData);
+    setTimeout(() => showPage('dashboard'), 600);
+
+  } catch (e) {
+    statusEl.className = 'verify-status error';
+    statusEl.innerHTML = '✕ Connection failed. Please try again.';
+    btn.disabled = false;
+    btn.textContent = 'Connect & get my MCP URL';
+  }
+}
+
+// ============ DASHBOARD ============
+async function loadDashboard(user, userData) {
+  const email = user.email || '';
+  document.getElementById('dash-greeting').textContent = 'Welcome back' + (email ? ', ' + email.split('@')[0] : '');
+  document.getElementById('dash-email').textContent = email;
+
+  const mcpUrl = `https://intervals-mcp-server-d4hs.onrender.com/mcp?token=${userData.access_token}`;
+  document.getElementById('dash-mcp-url').textContent = mcpUrl;
+
+  const status = userData.subscription_status || 'trial';
+  const trialEnd = userData.trial_end_date ? new Date(userData.trial_end_date) : null;
+  const now = new Date();
+
+  const badgeEl = document.getElementById('dash-status-badge');
+  const subEl = document.getElementById('dash-status-sub');
+
+  if (status === 'active') {
+    badgeEl.innerHTML = '<span class="status-badge active">Active</span>';
+    subEl.textContent = 'Subscription active';
+  } else if (status === 'trial' && trialEnd && trialEnd > now) {
+    const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+    badgeEl.innerHTML = '<span class="status-badge trial">Trial</span>';
+    subEl.textContent = daysLeft + ' day' + (daysLeft !== 1 ? 's' : '') + ' remaining';
+  } else {
+    badgeEl.innerHTML = '<span class="status-badge expired">Expired</span>';
+    subEl.textContent = 'Trial ended — upgrade to continue';
+  }
+}
+
+function copyMcpUrl() {
+  const url = document.getElementById('dash-mcp-url').textContent;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ============ NAV ============
+function updateNavForUser() {
+  document.getElementById('nav-guest').classList.add('hidden');
+  document.getElementById('nav-user').classList.remove('hidden');
+}
+
+function updateNavForGuest() {
+  document.getElementById('nav-guest').classList.remove('hidden');
+  document.getElementById('nav-user').classList.add('hidden');
+}
+
+// ============ SIGN OUT ============
+async function signOut() {
+  await sb.auth.signOut();
+  updateNavForGuest();
+  showPage('landing');
+}
+
+// ============ SESSION CHECK ON LOAD ============
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    updateNavForUser();
+    const { data } = await sb.from('users').select('athlete_id, access_token, subscription_status, trial_end_date').eq('id', session.user.id).single();
+    if (data?.athlete_id) {
+      await loadDashboard(session.user, data);
+      showPage('dashboard');
+    } else {
+      showPage('onboarding');
+    }
+  }
+})();
+
+// Init auth tab mode
+document.getElementById('auth-submit').dataset.mode = 'signup';
+</script>
+</body>
+</html>
